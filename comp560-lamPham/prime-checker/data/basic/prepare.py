@@ -20,9 +20,9 @@ def is_prime(n):
             return False
     return True
 
-# Generate data: numbers from 2 to 20 with their prime status (simplified range)
+# Generate data: numbers from 2 to 100 with their prime status
 data_lines = []
-for num in range(2, 21):
+for num in range(2, 101):
     label = "P" if is_prime(num) else "N"
     data_lines.append(f"{num}:{label}")
 

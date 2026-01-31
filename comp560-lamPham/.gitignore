@@ -15,3 +15,7 @@ out/
 *.bin
 *.pkl
 llm_output.txt
+llm_output_cpu.txt
+results/
+training/
+arithmetic/results/
