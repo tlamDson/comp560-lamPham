@@ -179,25 +179,22 @@ Split: 90% train, 10% validation
 ---
 
 ## Final Results
-
+                            
 ### Performance
 - **Training Time**: 3 minutes 10 seconds
 - **Speedup**: 1.9x faster than CPU baseline (6 min → 3.1 min)
 - **Hardware**: RTX 4060, BF16 precision, no torch.compile
 
-### Accuracy
+### Accuracy                                                                   
 - **Overall**: 100% (80/80 correct)
 - **By Carry Type**:
   - 0 carries: 20/20 (100%)
   - 1 carry: 20/20 (100%)
   - 2 carries: 20/20 (100%)
-  - 3 carries: 20/20 (100%)
+  - 3 carries: 20/20 (100%)                   
+- **Checkpoint Size**: ~7 MB             
 
-### Model Size
-- **Parameters**: 1.77M
-- **Checkpoint Size**: ~7 MB
-
----
+---                                                                  
 
 ## Key Lessons Learned
 
@@ -221,7 +218,7 @@ Train on GPU (fast), sample on CPU (stable) provides best reliability without sa
   2. **Linux Setup**: Enable torch.compile with Triton (~30% faster)
 3. **Model Pruning**: Reduce to 4 layers with wider embedding
 4. **Early Stopping**: Monitor validation accuracy, stop at 100%
-
+                                                                                                                                      
 ### Estimated Impact
 With full optimizations on Linux + Triton, training time could potentially reach **<90 seconds** while maintaining 100% accuracy.
 
