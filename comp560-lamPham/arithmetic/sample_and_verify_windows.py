@@ -1,6 +1,8 @@
 """
 Sample and automatically verify 3-digit addition results.
 This script prompts the model and verifies the predicted sum.
+
+Windows version - uses CPU for sampling (GPU sampling can be unstable on Windows).
 """
 import os
 import random
@@ -71,16 +73,16 @@ def verify_predictions(cases, predict_fn):
 
     return correct, total, errors, by_carry
 
-# Configuration
-NANOGPT_PATH = r"..\\..\\comp560-nanoGPT"
-CONFIG_FILE = r"config/basic.py"
+# Configuration - Windows paths (using raw strings with backslashes)
+NANOGPT_PATH = r"..\..\comp560-nanoGPT"
+CONFIG_FILE = r"config\basic.py"
 MAX_NEW_TOKENS = 4
 EVAL_PER_CARRY = 20
 SEED = 42
 TEMPERATURE = 0.8  # Slightly increase for stability
 TOP_K = 200  # Add top_k sampling
 
-print("AUTOMATED SAMPLE & VERIFY (ADDITION)")
+print("AUTOMATED SAMPLE & VERIFY (ADDITION) - Windows")
 
 sample_script = os.path.join(NANOGPT_PATH, "sample.py")
 base_cmd = [
@@ -115,10 +117,10 @@ try:
             f"--start={prompt}",
             f"--temperature={TEMPERATURE}",
             f"--top_k={TOP_K}",
-            "--device=cuda"  # Explicitly set device
+            "--device=cpu"  # Use CPU on Windows (GPU sampling can be unstable)
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env, timeout=60)
             return extract_prediction(result.stdout, prompt)
         except subprocess.TimeoutExpired:
             print(f"  Timeout on {prompt}")
@@ -155,7 +157,7 @@ try:
         pred_str = pred_sum if pred_sum is not None else "None"
         report_lines.append(f"  {a:03d}+{b:03d}={pred_str} should be {actual_sum:04d}")
 
-    with open("results/llm_output.txt", "w") as f:
+    with open(r"results\llm_output.txt", "w") as f:
         f.write("\n".join(report_lines) + "\n")
 
     print("VERIFICATION RESULTS")
@@ -178,7 +180,7 @@ try:
     else:
         print("\nPERFECT! All predictions correct!")
 
-    print("\nSaved report to llm_output.txt")
+    print("\nSaved report to results\\llm_output.txt")
 
 except subprocess.CalledProcessError as e:
     print(f"Error running sample.py: {e}")

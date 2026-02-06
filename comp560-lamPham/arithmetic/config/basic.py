@@ -1,9 +1,9 @@
 # train a miniature 3-digit addition model (SPEEDRUN MODE)
 
 out_dir = 'out'
-eval_interval = 50
-eval_iters = 20
-log_interval = 10
+eval_interval = 1000  # Minimal eval
+eval_iters = 5  # Very fast eval
+log_interval = 200  # Minimal logging
 
 always_save_checkpoint = False
 
@@ -12,21 +12,27 @@ wandb_project = 'arithmetic'
 
 dataset = 'basic'
 gradient_accumulation_steps = 1
-batch_size = 256  # Increased from 64 to maximize GPU utilization
+batch_size = 1024  # Max out VRAM
 block_size = 16
 
-n_layer = 6
-n_head = 6
-n_embd = 192
+# Smaller model = faster training
+n_layer = 3  # Reduced from 4
+n_head = 4
+n_embd = 192  # Reduced from 256
 dropout = 0.0
 
-learning_rate = 3e-3  # Balanced: faster than 1e-3, safer than 5e-3
-max_iters = 6000  # Increased from 4000 (needs more iterations to converge)
-lr_decay_iters = 6000
-min_lr = 3e-4  # Proportional to new learning_rate
-beta2 = 0.95
+# Training settings - AGGRESSIVE
+learning_rate = 6e-3  # Very high LR
+max_iters = 5000  # Slightly more for 100%
+lr_decay_iters = 5000
+min_lr = 6e-4
+beta2 = 0.99  # More momentum
 
-warmup_iters = 200  # Increased from 20 for stability with higher LR
+warmup_iters = 50  # Very short warmup
+
+# Early Stopping: Disabled for now - low loss doesn't guarantee 100% accuracy
+# Set to 0 to disable, or use very low value like 0.0001
+early_stop_loss = 0.0  # Disabled - let it train full iterations
 
 import torch
 import sys
@@ -35,7 +41,5 @@ import sys
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float32'
 
-# Disable compile on Windows (Triton issues) or if CUDA not available
-# On Windows, torch.compile requires Triton which has limited support
-is_windows = sys.platform == 'win32'
-compile = False if is_windows or not torch.cuda.is_available() else True
+# Disable compile - for short runs, JIT overhead doesn't pay off
+compile = False

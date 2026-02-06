@@ -1,0 +1,56 @@
+# Virtual environment (installed in root directory)
+.venv/
+venv/
+env/
+.env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Egg files
+*.egg
+*.egg-info/
+
+# Build directories
+dist/
+build/
+
+# Model output directories
+out/
+out-*/
+
+# Data files (generated)
+*.bin
+*.pkl
+
+# Results (can be regenerated)
+results/
+llm_output.txt
+llm_output_cpu.txt
+
+# Training checkpoints
+training/
+*.ckpt
+*.pt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+wandb/
