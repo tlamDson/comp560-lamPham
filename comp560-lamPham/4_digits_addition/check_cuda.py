@@ -4,7 +4,7 @@ Diagnostic script to check CUDA availability and PyTorch installation.
 import sys
 import platform
 
-print("=" * 60)ve
+print("=" * 60)
 print("CUDA AVAILABILITY CHECK")
 print("=" * 60)
 
@@ -63,21 +63,21 @@ if torch.cuda.is_available():
     if is_windows:
         print("  Compile: False (disabled on Windows)")
         print("\n✓ GPU mode enabled (BF16 speedup)")
-        print("  Expected training time: ~1-2 minutes")
+        print("  Expected training time: ~3-5 minutes (4-digit is more complex)")
         print("  Note: torch.compile disabled due to Triton compatibility on Windows")
     else:
         try:
             import triton
             print("  Compile: True")
             print("\n✓ Full speedrun mode enabled!")
-            print("  Expected training time: <1 minute")
+            print("  Expected training time: ~2-3 minutes")
         except ImportError:
             print("  Compile: False (Triton not available)")
             print("\n✓ GPU mode enabled (no compile)")
-            print("  Expected training time: ~1-2 minutes")
+            print("  Expected training time: ~3-5 minutes")
 else:
     print("  Device: CPU")
     print("  Dtype: float32")
     print("  Compile: False")
     print("\n⚠ Running in CPU fallback mode (slower)")
-    print("  Expected training time: ~6 minutes")
+    print("  Expected training time: ~10-15 minutes (4-digit is more complex)")

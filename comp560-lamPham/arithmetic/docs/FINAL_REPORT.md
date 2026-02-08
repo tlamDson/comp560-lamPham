@@ -180,10 +180,15 @@ Split: 90% train, 10% validation
 
 ## Final Results
                             
-### Performance
+### Performance (Windows)
 - **Training Time**: 3 minutes 10 seconds
 - **Speedup**: 1.9x faster than CPU baseline (6 min → 3.1 min)
 - **Hardware**: RTX 4060, BF16 precision, no torch.compile
+
+### Performance (Linux)
+- **Training Time**: 2 minutes
+- **Speedup**: 3x faster than CPU baseline (6 min → 2 min)
+- **Hardware**: RTX 4060, BF16 precision, torch.compile enabled
 
 ### Accuracy                                                                   
 - **Overall**: 100% (80/80 correct)
@@ -212,15 +217,29 @@ Train on GPU (fast), sample on CPU (stable) provides best reliability without sa
 
 ---
 
-## Future Optimizations (Not Implemented)
+## Linux Optimization (Implemented)
+
+### Changes Made
+1. **Enabled torch.compile**: Triton backend now works on Linux
+2. **Platform-specific scripts**: Created `sample_and_verify_linux.py` and `sample_and_verify_windows.py`
+
+### Results
+- **Training Time**: 2 minutes (down from 3 min 10s on Windows)
+- **Speedup**: ~37% faster than Windows GPU setup
+- **Total Speedup**: 3x faster than original CPU baseline
+
+---
+
+## Future Optimizations (Not Yet Implemented)
 
 ### Potential Further Speedups
-  2. **Linux Setup**: Enable torch.compile with Triton (~30% faster)
-3. **Model Pruning**: Reduce to 4 layers with wider embedding
-4. **Early Stopping**: Monitor validation accuracy, stop at 100%
+1. **Model Pruning**: Reduce to 4 layers with wider embedding
+2. **Early Stopping**: Monitor validation accuracy, stop at 100%
+3. **Mixed Precision Training**: Experiment with FP16 vs BF16
+4. **Gradient Checkpointing**: Trade compute for memory efficiency
                                                                                                                                       
 ### Estimated Impact
-With full optimizations on Linux + Triton, training time could potentially reach **<90 seconds** while maintaining 100% accuracy.
+With model pruning and early stopping, training time could potentially reach **<90 seconds** while maintaining 100% accuracy.
 
 ---
 

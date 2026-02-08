@@ -1,4 +1,4 @@
-# train a miniature 3-digit addition model (SPEEDRUN MODE)
+# train a miniature 4-digit addition model (SPEEDRUN MODE)
 
 out_dir = 'out'
 eval_interval = 50
@@ -8,12 +8,12 @@ log_interval = 10
 always_save_checkpoint = False
 
 wandb_log = False
-wandb_project = 'arithmetic'
+wandb_project = '4_digits_arithmetic'
 
 dataset = 'basic'
 gradient_accumulation_steps = 1
 batch_size = 256  # Increased from 64 to maximize GPU utilization
-block_size = 16
+block_size = 20   # Increased from 16 (longer examples: 4+1+4+1+5=15 chars + newline)
 
 # Model Pruning: 4 layers with wider embedding (faster than 6 layers)
 n_layer = 4
@@ -23,12 +23,12 @@ dropout = 0.0
 
 # Training settings
 learning_rate = 4e-3  # Slightly higher with smaller model
-max_iters = 6000  # Max iterations (early stopping will likely trigger before this)
-lr_decay_iters = 6000
+max_iters = 8000  # Increased for 4-digit (more complex task)
+lr_decay_iters = 8000
 min_lr = 4e-4  # Proportional to new learning_rate
 beta2 = 0.95
 
-warmup_iters = 150  # Reduced warmup for faster start
+warmup_iters = 200  # Slightly increased for more complex task
 
 # Early Stopping: Disabled for now - low loss doesn't guarantee 100% accuracy
 # Set to 0 to disable, or use very low value like 0.0001

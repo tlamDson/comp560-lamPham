@@ -20,6 +20,8 @@ The model learns from a stream of addition examples:
 arithmetic/
 ├── README.md
 ├── check_cuda.py
+├── sample_and_verify_linux.py    # Linux version (GPU)
+├── sample_and_verify_windows.py  # Windows version (CPU)
 ├── config/
 │   └── basic.py
 ├── data/
@@ -29,7 +31,7 @@ arithmetic/
 │       ├── train.bin
 │       └── val.bin
 ├── docs/
-│   ├── FINAL_REPORT.md
+│   └── FINAL_REPORT.md
 ├── results/
 │   ├── llm_output.txt
 │   └── llm_output_cpu.txt
@@ -40,27 +42,44 @@ arithmetic/
 
 ## Setup
 
-**1. Create Python virtual environment:**
+**1. Create Python virtual environment (from the root directory):**
 
 ```bash
+# From the root comp560-LamPham directory
 python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
 ```
 
-**2. Install dependencies:**
+**2. Activate the virtual environment:**
+
+**Linux/macOS:**
+```bash
+source venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+**Windows (CMD):**
+```cmd
+venv\Scripts\activate.bat
+```
+
+**3. Install dependencies:**
 
 ```bash
 pip install torch numpy tqdm
 ```
 
-**3. Prepare data:**
+**4. Prepare data:**
 
 ```bash
-cd arithmetic
+cd comp560-lamPham/arithmetic
 python data/basic/prepare.py
 ```
 
-**4. Check Hardware (Optional):**
+**5. Check Hardware (Optional):**
 
 To ensure GPU acceleration is available (recommended for speedrun):
 
@@ -74,18 +93,44 @@ python check_cuda.py
 
 From the `arithmetic` directory:
 
+**Linux:**
 ```bash
 NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/train.py config/basic.py
 ```
 
+**Windows (PowerShell):**
+```powershell
+$env:NANOGPT_CONFIG="..\..\comp560-nanoGPT\configurator.py"
+python -u ..\..\comp560-nanoGPT\train.py config\basic.py
+```
+
 ---
 
-## Sampling
+## Sampling & Verification
 
-After training:
+After training, run the verification script to test the model's accuracy:
 
+**Linux:**
+```bash
+python sample_and_verify_linux.py
+```
+
+**Windows:**
+```powershell
+python sample_and_verify_windows.py
+```
+
+### Manual Sampling (Optional)
+
+**Linux:**
 ```bash
 NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/sample.py config/basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="123+456="
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:NANOGPT_CONFIG="..\..\comp560-nanoGPT\configurator.py"
+python -u ..\..\comp560-nanoGPT\sample.py config\basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="123+456="
 ```
 
 ---
