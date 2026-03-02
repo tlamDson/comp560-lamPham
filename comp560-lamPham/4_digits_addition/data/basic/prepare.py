@@ -1,6 +1,6 @@
 """
 Prepare a 4-digit addition dataset for character-level modeling.
-Examples: "1234+5678=06912"
+Examples: "1234+5678=21960" (Target is REVERSED)
 """
 import os
 import pickle
@@ -10,7 +10,7 @@ import numpy as np
 SEED = 42
 MIN_NUM = 1000
 MAX_NUM = 9999
-TARGET_PER_CARRY = 50000  # Increased dataset size for more complex task
+TARGET_PER_CARRY = 50000  
 
 def count_carries(a, b):
     """Count the number of carries when adding two 4-digit numbers."""
@@ -27,8 +27,10 @@ def count_carries(a, b):
     return carries
 
 def format_example(a, b):
-    """Format as 4-digit + 4-digit = 5-digit (max sum is 19998)."""
-    return f"{a:04d}+{b:04d}={a + b:05d}\n"
+    """Format as 4-digit + 4-digit = 5-digit reversed."""
+    sum_str = f"{a + b:05d}"
+    reversed_sum = sum_str[::-1]
+    return f"{a:04d}+{b:04d}={reversed_sum}\n"
 
 random.seed(SEED)
 
