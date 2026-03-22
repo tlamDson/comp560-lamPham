@@ -14,6 +14,7 @@ dataset = 'basic'
 gradient_accumulation_steps = 1  
 batch_size = 1024  
 block_size = 20   # 4+1+4+1+5=15 chars + padding
+sample_stride = 16  # One fixed example length including newline in token stream
 
 n_layer = 4
 n_head = 8
@@ -21,7 +22,6 @@ n_embd = 64
 dropout = 0.0
 weight_decay = 0.0        # Allow weights to grow sharp to calculate carries
 
-# Training settings - STABLE convergence (30 min run)
 learning_rate = 6e-3  
 max_iters = 5000    
 lr_decay_iters = 5000
@@ -30,6 +30,7 @@ beta2 = 0.99
 grad_clip = 1.0      # Prevents math logic from destabilizing
 warmup_iters = 100
 early_stop_loss = 1.12
+early_stop_acc = 0.99
 answer_only_loss = True
 
 import torch

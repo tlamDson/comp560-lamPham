@@ -98,13 +98,13 @@ Confirms GPU acceleration is available for fast training.
 **With output to screen** (see training progress):
 
 ```bash
-time NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/train.py config/basic.py
+time python -u ../common/train.py config/basic.py
 ```
 
 **Silent mode** (redirect to `/dev/null` - saves CPU time by not printing to screen):
 
 ```bash
-time NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/train.py config/basic.py > /dev/null
+time python -u ../common/train.py config/basic.py > /dev/null
 ```
 
 > **Note:** Using `> /dev/null` eliminates console I/O overhead, resulting in faster execution. This is especially useful for CPU-bound systems or when running benchmarks.
@@ -203,7 +203,7 @@ Options:
 nvidia-smi -l 1
 
 # In terminal 2
-time NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/train.py config/basic.py
+time python -u ../common/train.py config/basic.py
 ```
 
 ---
@@ -226,7 +226,7 @@ This script:
 Test individual predictions:
 
 ```bash
-NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/sample.py config/basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="1234+5678="
+python -u ../../comp560-nanoGPT/sample.py config/basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="1234+5678="
 ```
 
 ---
@@ -264,11 +264,11 @@ weight_decay = 0.0       # Allow sharp weights for carry calculation
 
 ---
 
-## Key Changes in train.py (comp560-nanoGPT)
+## Key Changes in train.py (comp560-lamPham/common)
 
 ### 1. Print Validation Accuracy
 
-**Modified:** Line ~266 in `train.py`
+**Modified:** Shared trainer in `../common/train.py`
 
 ```python
 print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, val acc {losses['val_acc']*100:.2f}%")
@@ -278,7 +278,7 @@ Now displays validation accuracy percentage during training, making it easy to m
 
 ### 2. Auto-Stop at 99% Accuracy
 
-**Added:** Lines ~293-296 in `train.py`
+**Added:** Shared trainer policy in `../common/train.py`
 
 ```python
 early_stop_acc = 0.99  # 99% threshold
@@ -291,7 +291,7 @@ Training automatically stops when validation accuracy hits ≥99%, saving time a
 
 ### 3. Log Accuracy to Weights & Biases
 
-**Added:** Line ~273 in `train.py`
+**Added:** Shared trainer logging in `../common/train.py`
 
 ```python
 "val/acc": losses['val_acc'],  # Log accuracy to wandb
@@ -330,7 +330,7 @@ batch_size = 512  # Down from 1024
 **Solution:** Use silent mode to reduce I/O overhead:
 
 ```bash
-time NANOGPT_CONFIG=../../comp560-nanoGPT/configurator.py python -u ../../comp560-nanoGPT/train.py config/basic.py > /dev/null
+time python -u ../common/train.py config/basic.py > /dev/null
 ```
 
 ### Issue: Model Not Reaching 99% Accuracy
@@ -357,4 +357,4 @@ Using the optimized configuration:
 
 - [nanoGPT](https://github.com/karpathy/nanoGPT) by Andrej Karpathy
 - Original 3-digit addition experiment in `/comp560-lamPham/arithmetic/`
-- Training modifications in `/comp560-nanoGPT/train.py`
+- Training modifications in `/comp560-lamPham/common/train.py`

@@ -18,8 +18,7 @@ CONFIG="config/basic.py"
 LOG_DIR="/dev/shm/training_logs"
 NUM_RUNS=5
 
-TRAIN_SCRIPT="../../comp560-nanoGPT/train.py"
-CONFIGURATOR="../../comp560-nanoGPT/configurator.py"
+TRAIN_SCRIPT="../common/train.py"
 VERIFY_SCRIPT="sample_and_verify_linux.py"
 
 # Ensure log directory exists and is clean
@@ -41,8 +40,7 @@ do
     echo ">>> Trial $i / $NUM_RUNS — Training..."
 
     # Run training with 'time', capture everything (stdout+stderr) to log
-    { time NANOGPT_CONFIG="$CONFIGURATOR" \
-      python -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
+    { time python -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
 
     echo "    Training done. Running sample & verify..."
 
