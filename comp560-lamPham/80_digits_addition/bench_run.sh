@@ -1,0 +1,149 @@
+#!/bin/bash
+set -e
+
+CONFIG="config/basic.py"
+LOG_DIR="/dev/shm/80_digits_training_logs"
+NUM_RUNS=5
+TRAIN_SCRIPT="../common/train.py"
+VERIFY_SCRIPT="sample_and_verify_linux.py"
+
+rm -rf ""
+mkdir -p ""
+
+echo "============================================================"
+echo "  AUTOMATED BENCHMARK:  Training + Verify Runs"
+echo "============================================================"
+echo "Config       : "
+echo "Log directory: "
+echo "Start time   : Mon Mar 23 13:06:31 EDT 2026"
+echo "============================================================"
+echo ""
+
+for i in 1
+do
+    echo ">>> Trial  /  — Training..."
+    { time python -u "" "" ; } > "/train_.log" 2>&1
+
+    echo "    Training done. Running sample & verify..."
+    python -u "" > "/verify_.log" 2>&1
+
+    echo "    Trial  complete."
+    echo ""
+done
+
+echo "============================================================"
+echo "  All  trials finished at Mon Mar 23 13:06:31 EDT 2026"
+echo "============================================================"
+echo ""
+
+echo "----------------------------------------------------------"
+printf "%-6s | %-14s | %-14s | %-10s\n" "Trial" "Real Time" "Final MFU (%)" "Accuracy (%)"
+echo "----------------------------------------------------------"
+
+for i in 1
+do
+    REAL_TIME_RAW=
+    MFU=N/A
+    ACC=
+
+    printf "  %-4s | %-14s | %-14s | %-10s\n" "" "" "" ""
+done
+
+echo "----------------------------------------------------------"
+echo ""
+
+echo "--- Per-Carry Accuracy Summary (across all trials) ---"
+for carry in 0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+do
+    vals=()
+    for i in 1
+    do
+        v=N/A
+        vals+=("")
+    done
+    printf "  carry %d : %s\n" "" ""
+done
+
+echo ""
+echo "Logs saved in: "
+echo "Done at: Mon Mar 23 13:06:31 EDT 2026"
