@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Monorepo mode: comp560-nanoGPT is tracked as a normal subdirectory.
+# Keep this hook as a no-op placeholder for future checks.
+
+exit 0
