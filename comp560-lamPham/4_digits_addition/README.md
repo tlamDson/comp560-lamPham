@@ -29,6 +29,8 @@ Each example is exactly 20 characters (4+1+4+1+5+padding), designed to teach the
 ├── sample_and_verify_linux.py     # GPU-based sampling & verification
 ├── sample_and_verify_windows.py   # Windows version (CPU)
 ├── sample_cpu.py                  # CPU fallback
+├── hyperopt_bot.py                # Hyperparameter tuning bot (Optuna + pruning)
+├── requirements_tuning.txt        # Extra dependencies for tuning bot
 ├── training.log                   # Training output log
 ├── config/
 │   └── basic.py                   # ⭐ OPTIMIZED CONFIG (100% accuracy)
@@ -58,7 +60,8 @@ Each example is exactly 20 characters (4+1+4+1+5+padding), designed to teach the
 
 ```bash
 # Verify packages are available
-python -c "import torch, numpy; print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
+which python
+python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
 ```
 
 **Option B: Create Python virtual environment**
@@ -153,6 +156,101 @@ Trial  Real Time    MFU (%)    Accuracy (%)
 Mean   15.05s      45.92%     100.00%
 StdDev  0.18s       0.23%       0.00%
 ```
+
+---
+
+## Hyperparameter Tuning Bot (NEW)
+
+This folder now includes a tuning bot that automates config search for the
+4-digit task with safety and reporting built in.
+
+Core behavior:
+
+- **VRAM safety:** uses a VRAM estimator and auto-selects a safe `batch_size`
+    via binary search under a configurable limit (default `7.5 GB`).
+- **Time pruning:** kills weak configs early with:
+    - Optuna median pruner,
+    - no-loss-improvement rule (`500` iters by default),
+    - slow-trial pruning against best completed trial speed.
+- **Hardware monitoring:** checks GPU memory/power/temperature and prunes
+    throttled runs (low-power state pattern, e.g. near P4/low watts).
+- **Reproducibility:** each trial stores config file path, seed, git commit,
+    trial logs, and run metadata.
+- **Auto reporting:** writes a trial leaderboard CSV and champion JSON.
+
+### Install tuning dependencies
+
+```bash
+cd comp560-lamPham/4_digits_addition
+pip install -r requirements_tuning.txt
+```
+
+### Manual Smoke Test (recommended first)
+
+Run a short test to verify the bot wiring and report generation:
+
+```bash
+python hyperopt_bot.py \
+    --study-name 4digit-smoke \
+    --n-trials 3 \
+    --timeout-min 20 \
+    --max-iters 1200 \
+    --eval-interval 100 \
+    --eval-iters 2 \
+    --log-interval 50 \
+    --compile-trials=false
+```
+
+What this smoke test validates:
+
+1. Trial config generation works.
+2. Training launch + log parsing work.
+3. Pruning callbacks are active.
+4. CSV/champion report export works.
+
+### Full Tuning Run (4-digit)
+
+After smoke test passes, run a larger search:
+
+```bash
+python hyperopt_bot.py \
+    --study-name 4digit-full \
+    --n-trials 30 \
+    --timeout-min 180 \
+    --max-iters 5000 \
+    --eval-interval 200 \
+    --target-acc 1.0 \
+    --max-vram-gb 7.5
+```
+
+### Output Artifacts
+
+Each run is stored under:
+
+```text
+results/hyperopt/<timestamp>_<study_name>/
+```
+
+Important files:
+
+- `run_meta.json`: environment + git commit + launch args.
+- `configs/trial_*.py`: auto-generated trial configs.
+- `logs/trial_*.log`: training logs per trial.
+- `reports/trials.csv`: leaderboard across all trials.
+- `reports/champion.json`: best completed config summary.
+
+### Useful Flags
+
+- `--allow-battery`: bypass AC power check (not recommended).
+- `--allow-shared-gpu`: allow running while other GPU processes exist.
+- `--auto-reduce-on-throttle`: retry throttled trial with half batch size.
+- `--compile-trials`: toggle `torch.compile` for trial runs.
+- `--wandb-log=true`: turn on WandB logging for each trial.
+- `--wandb-run-prefix myexp`: prefix run names; bot appends `-trial_XXXX` automatically.
+- `--cleanup-artifacts=true`: auto-delete config/log/checkpoint for non-success trials.
+- `--cleanup-finished-no-target=true`: also clean trials that finish without reaching target.
+- `--keep-failed-logs=true`: keep logs even when cleanup is enabled.
+- `--keep-failed-configs=true`: keep generated trial configs even when cleanup is enabled.
 
 ---
 

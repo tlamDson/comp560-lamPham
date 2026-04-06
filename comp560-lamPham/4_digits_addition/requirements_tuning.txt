@@ -1,0 +1,3 @@
+optuna>=3.6.1
+nvidia-ml-py>=12.535.161
+tqdm>=4.66.0
