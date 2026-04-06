@@ -72,14 +72,21 @@ venv\Scripts\activate.bat
 pip install torch numpy tqdm
 ```
 
-**4. Prepare data:**
+**4. Environment check (Torch/CUDA):**
+
+```bash
+which python
+python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
+```
+
+**5. Prepare data:**
 
 ```bash
 cd comp560-lamPham/arithmetic
 python data/basic/prepare.py
 ```
 
-**5. Check Hardware (Optional):**
+**6. Check Hardware (Optional):**
 
 To ensure GPU acceleration is available (recommended for speedrun):
 

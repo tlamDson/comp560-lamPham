@@ -25,12 +25,12 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.cuda.set_sync_debug_mode(0)
 
-# Import model from read-only upstream dependency.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_NANOGPT_ROOT = _REPO_ROOT / "comp560-nanoGPT"
-sys.path.insert(0, str(_NANOGPT_ROOT))
+# Import project model factory.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
-from model import GPTConfig, GPT  # noqa: E402
+from models.model_factory import build_model  # noqa: E402
 
 
 # -----------------------------------------------------------------------------
@@ -38,6 +38,10 @@ from model import GPTConfig, GPT  # noqa: E402
 # I/O
 out_dir = "out"
 eval_interval = 2000
+adaptive_eval_interval = False
+adaptive_eval_loss_threshold = 0.5
+adaptive_eval_multiplier = 2.0
+adaptive_eval_max = 500
 log_interval = 1
 eval_iters = 200
 eval_only = False
@@ -57,6 +61,8 @@ block_size = 1024
 sample_stride = 16
 
 # model
+model_family = "nanogpt"
+phi_model_source = "Phi-3-mini-4k-instruct"
 n_layer = 12
 n_head = 12
 n_embd = 768
@@ -84,6 +90,7 @@ backend = "nccl"
 device = "cuda"
 dtype = "bfloat16" if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else "float16"
 compile = True
+random_seed = 1337
 
 # task-specific policy toggles
 early_stop_loss = 0.0
@@ -163,7 +170,7 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(random_seed + seed_offset)
 device_type = "cuda" if "cuda" in device else "cpu"
 ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[dtype]
 ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -235,36 +242,22 @@ model_args = dict(
 )
 
 if init_from == "scratch":
-    print("Initializing a new model from scratch")
-    if meta_vocab_size is None:
-        print("defaulting to vocab_size=50304")
-    model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
+    print(f"Initializing a new {model_family} model from scratch")
 elif init_from == "resume":
-    print(f"Resuming training from {out_dir}")
-    ckpt_path = os.path.join(out_dir, "ckpt.pt")
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    checkpoint_model_args = checkpoint["model_args"]
-    for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-        model_args[k] = checkpoint_model_args[k]
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-    state_dict = checkpoint["model"]
-    unwanted_prefix = "_orig_mod."
-    for k, v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    iter_num = checkpoint["iter_num"]
-    best_val_loss = checkpoint["best_val_loss"]
+    print(f"Resuming {model_family} training from {out_dir}")
 elif init_from.startswith("gpt2"):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
-    model = GPT.from_pretrained(init_from, dict(dropout=dropout))
-    for k in ["n_layer", "n_head", "n_embd", "block_size", "bias", "vocab_size"]:
-        model_args[k] = getattr(model.config, k)
-else:
-    raise ValueError(f"Unsupported init_from mode: {init_from}")
+
+model, model_args, checkpoint, iter_num, best_val_loss = build_model(
+    model_family=model_family,
+    init_from=init_from,
+    model_args=model_args,
+    meta_vocab_size=meta_vocab_size,
+    dropout=dropout,
+    out_dir=out_dir,
+    device=device,
+    phi_model_source=phi_model_source,
+)
 
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -340,17 +333,36 @@ local_iter_num = 0
 raw_model = model.module if ddp else model
 running_mfu = -1.0
 
+current_eval_interval = max(1, int(eval_interval))
+if iter_num % current_eval_interval == 0:
+    next_eval_iter = iter_num
+else:
+    next_eval_iter = iter_num + (current_eval_interval - (iter_num % current_eval_interval))
+
 while True:
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
 
-    if iter_num % eval_interval == 0 and master_process:
+    if master_process and iter_num >= next_eval_iter:
         losses = estimate_loss()
         print(
             f"step {iter_num}: train loss {losses['train']:.4f}, "
             f"val loss {losses['val']:.4f}, val acc {losses['val_acc']*100:.2f}%"
         )
+
+        if adaptive_eval_interval and losses["train"] < adaptive_eval_loss_threshold:
+            grown_interval = int(math.ceil(current_eval_interval * adaptive_eval_multiplier))
+            max_interval = max(1, int(adaptive_eval_max))
+            next_interval = max(current_eval_interval, min(max_interval, grown_interval))
+            if next_interval > current_eval_interval:
+                current_eval_interval = next_interval
+                print(
+                    "adaptive eval_interval updated to "
+                    f"{current_eval_interval} (train loss {losses['train']:.4f})"
+                )
+
+        next_eval_iter = iter_num + current_eval_interval
 
         if wandb_log:
             wandb.log(
@@ -378,11 +390,20 @@ while True:
                 print(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
 
-        if losses["val_acc"] >= early_stop_acc:
-            print(
-                f"Early stopping triggered! val_acc {losses['val_acc']*100:.2f}% "
-                f">= threshold {early_stop_acc*100:.2f}%"
-            )
+        stop_by_loss = early_stop_loss > 0 and losses["val"] <= early_stop_loss
+        stop_by_acc = losses["val_acc"] >= early_stop_acc
+
+        if stop_by_loss or stop_by_acc:
+            if stop_by_loss:
+                print(
+                    f"Early stopping triggered! val_loss {losses['val']:.6f} "
+                    f"<= threshold {early_stop_loss:.6f}"
+                )
+            else:
+                print(
+                    f"Early stopping triggered! val_acc {losses['val_acc']*100:.2f}% "
+                    f">= threshold {early_stop_acc*100:.2f}%"
+                )
             checkpoint = {
                 "model": raw_model.state_dict(),
                 "optimizer": optimizer.state_dict(),

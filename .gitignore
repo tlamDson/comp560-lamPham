@@ -54,3 +54,15 @@ Thumbs.db
 # Logs
 *.log
 wandb/
+
+# Temporary profiling configs
+**/_tmp_profile_*.py
+
+# Local virtual environments in this workspace
+math_ai/
+test_bot/
+
+# Heavy Phi artifacts (keep code/docs and selected small metadata JSONs)
+Phi-3-mini-4k-instruct/*.safetensors
+Phi-3-mini-4k-instruct/tokenizer.json
+Phi-3-mini-4k-instruct/tokenizer.model
