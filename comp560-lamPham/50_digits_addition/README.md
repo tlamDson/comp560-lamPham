@@ -4,6 +4,12 @@ This folder trains and evaluates a 50-digit addition model using the shared trai
 
 ## Quick Start
 
+Environment check (Torch/CUDA):
+```bash
+which python
+python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
+```
+
 Prepare data:
 ```bash
 cd 50_digits_addition
@@ -30,4 +36,5 @@ chmod +x bench_run.sh
 
 - Input format: 50-digit + 50-digit
 - Output digits: 51
-- This dataset is sampled randomly (not carry-balanced) to keep generation tractable for large digit lengths.
+- Data preparation is carry-balanced across all carry counts (0 through 50).
+- Verification uses carry-controlled test cases so every carry count (0 through 50) is evaluated.
