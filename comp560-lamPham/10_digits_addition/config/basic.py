@@ -12,7 +12,7 @@ wandb_run_name = '10digit-addition'
 
 dataset = 'basic'
 gradient_accumulation_steps = 1
-batch_size = 512
+batch_size = 1024
 block_size = 38   # 10+1+10+1+11 + padding
 sample_stride = 34  # One fixed example length including newline in token stream
 
@@ -22,10 +22,10 @@ n_embd = 64
 dropout = 0.0
 weight_decay = 0.0
 
-learning_rate = 3e-3
-max_iters = 12000
-lr_decay_iters = 12000
-min_lr = 3e-4
+learning_rate = 6e-3
+max_iters = 6000
+lr_decay_iters = 6000
+min_lr = 6e-4
 beta2 = 0.99
 grad_clip = 1.0
 warmup_iters = 200
