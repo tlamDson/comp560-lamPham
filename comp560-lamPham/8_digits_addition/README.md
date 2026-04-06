@@ -4,6 +4,12 @@ This folder trains and evaluates a 8-digit addition model using the shared train
 
 ## Quick Start
 
+Environment check (Torch/CUDA):
+```bash
+which python
+python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
+```
+
 Prepare data:
 ```bash
 cd 8_digits_addition
