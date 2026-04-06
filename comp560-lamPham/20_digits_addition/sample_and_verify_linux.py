@@ -24,7 +24,7 @@ MAX_NEW_TOKENS = RESULT_DIGITS
 TEMPERATURE = 0.8
 TOP_K = 200
 SEED = 42
-NUM_TEST_CASES = 200
+EVAL_PER_CARRY = 10
 
 
 def random_ndigit(num_digits):
@@ -45,6 +45,71 @@ def count_carries(a, b):
         else:
             carry = 0
     return carries
+
+
+def _digits_to_int_lsd_first(digits):
+    value = 0
+    for i, d in enumerate(digits):
+        value += d * (10 ** i)
+    return value
+
+
+def _build_pair_for_target_carries(target_carries, rng, max_pattern_trials=200):
+    # Generate one NUM_DIGITS-digit pair that produces exactly target_carries.
+    # This directly constructs per-position carry-out decisions and then samples
+    # digit pairs that satisfy those decisions.
+    for _ in range(max_pattern_trials):
+        carry_out_pattern = [0] * NUM_DIGITS
+        carry_positions = rng.sample(range(NUM_DIGITS), target_carries)
+        for p in carry_positions:
+            carry_out_pattern[p] = 1
+
+        a_digits = []
+        b_digits = []
+        carry_in = 0
+        feasible = True
+
+        for i in range(NUM_DIGITS):
+            must_carry = carry_out_pattern[i]
+            is_msd = (i == NUM_DIGITS - 1)
+
+            candidates = []
+            for da in range(10):
+                for db in range(10):
+                    if is_msd and (da == 0 or db == 0):
+                        continue
+                    has_carry = 1 if (da + db + carry_in) >= 10 else 0
+                    if has_carry == must_carry:
+                        candidates.append((da, db))
+
+            if not candidates:
+                feasible = False
+                break
+
+            da, db = rng.choice(candidates)
+            a_digits.append(da)
+            b_digits.append(db)
+            carry_in = must_carry
+
+        if not feasible:
+            continue
+
+        a = _digits_to_int_lsd_first(a_digits)
+        b = _digits_to_int_lsd_first(b_digits)
+        if count_carries(a, b) == target_carries:
+            return a, b
+
+    raise RuntimeError(f"Could not construct sample for carry={target_carries}")
+
+
+def generate_balanced_cases(per_carry, seed):
+    rng = random.Random(seed)
+    cases = []
+    for target in range(NUM_DIGITS + 1):
+        for _ in range(per_carry):
+            cases.append(_build_pair_for_target_carries(target, rng))
+    rng.shuffle(cases)
+    return cases
 
 
 def format_prompt(a, b):
@@ -98,7 +163,6 @@ def extract_prediction(output, prompt):
 
 
 def main():
-    random.seed(SEED)
     torch.manual_seed(SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
@@ -107,13 +171,12 @@ def main():
     model, encode, decode = load_model(OUT_DIR, DEVICE)
 
     by_carry = {c: {'correct': 0, 'total': 0} for c in range(NUM_DIGITS + 1)}
+    cases = generate_balanced_cases(EVAL_PER_CARRY, SEED)
     correct = 0
     errors = []
 
     start = time.time()
-    for _ in range(NUM_TEST_CASES):
-        a = random_ndigit(NUM_DIGITS)
-        b = random_ndigit(NUM_DIGITS)
+    for a, b in cases:
         prompt = format_prompt(a, b)
         carries = count_carries(a, b)
         by_carry[carries]['total'] += 1
@@ -128,7 +191,7 @@ def main():
         else:
             errors.append((a, b, predicted_str, actual_sum))
 
-    total = NUM_TEST_CASES
+    total = len(cases)
     elapsed = time.time() - start
     print(f"Accuracy: {100 * correct / total:.1f}%")
     print(f"Evaluation time: {elapsed:.2f}s")
