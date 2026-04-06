@@ -1,11 +1,28 @@
 #!/bin/bash
 set -e
 
-CONFIG="config/basic.py"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+RUNNER="${REPO_ROOT}/run.sh"
+VALIDATE_SCRIPT="${REPO_ROOT}/validate_env.py"
+
+CONFIG="${SCRIPT_DIR}/config/basic.py"
 LOG_DIR="/dev/shm/6_digits_training_logs"
 NUM_RUNS=5
-TRAIN_SCRIPT="../common/train.py"
-VERIFY_SCRIPT="sample_and_verify_linux.py"
+TRAIN_SCRIPT="${SCRIPT_DIR}/../common/train.py"
+VERIFY_SCRIPT="${SCRIPT_DIR}/sample_and_verify_linux.py"
+CARRY_MAX=6
+
+if [[ ! -x "${RUNNER}" ]]; then
+    echo "ERROR: runner script not executable: ${RUNNER}" >&2
+    echo "Run: chmod +x ${RUNNER}" >&2
+    exit 1
+fi
+
+echo ">>> Validating environment gatekeeper..."
+"${RUNNER}" "${VALIDATE_SCRIPT}" --profile core --require-cuda || exit 1
+echo "    Environment check passed."
+echo ""
 
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
@@ -21,11 +38,11 @@ echo ""
 
 for i in $(seq 1 $NUM_RUNS)
 do
-    echo ">>> Trial $i / $NUM_RUNS — Training..."
-    { time python -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
+    echo ">>> Trial $i / $NUM_RUNS - Training..."
+    { time "${RUNNER}" -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
 
     echo "    Training done. Running sample & verify..."
-    python -u "$VERIFY_SCRIPT" > "$LOG_DIR/verify_$i.log" 2>&1
+    "${RUNNER}" -u "$VERIFY_SCRIPT" > "$LOG_DIR/verify_$i.log" 2>&1
 
     echo "    Trial $i complete."
     echo ""
@@ -53,7 +70,7 @@ echo "----------------------------------------------------------"
 echo ""
 
 echo "--- Per-Carry Accuracy Summary (across all trials) ---"
-for carry in $(seq 0 6)
+for carry in $(seq 0 $CARRY_MAX)
 do
     vals=()
     for i in $(seq 1 $NUM_RUNS)

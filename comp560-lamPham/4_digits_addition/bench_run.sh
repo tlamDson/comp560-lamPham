@@ -13,13 +13,29 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+RUNNER="${REPO_ROOT}/run.sh"
+VALIDATE_SCRIPT="${REPO_ROOT}/validate_env.py"
+
 # -------------------------------- Configuration --------------------------------
-CONFIG="config/basic.py"
+CONFIG="${SCRIPT_DIR}/config/basic.py"
 LOG_DIR="/dev/shm/training_logs"
 NUM_RUNS=5
 
-TRAIN_SCRIPT="../common/train.py"
-VERIFY_SCRIPT="sample_and_verify_linux.py"
+TRAIN_SCRIPT="${SCRIPT_DIR}/../common/train.py"
+VERIFY_SCRIPT="${SCRIPT_DIR}/sample_and_verify_linux.py"
+
+if [[ ! -x "${RUNNER}" ]]; then
+    echo "ERROR: runner script not executable: ${RUNNER}" >&2
+    echo "Run: chmod +x ${RUNNER}" >&2
+    exit 1
+fi
+
+echo ">>> Validating environment gatekeeper..."
+"${RUNNER}" "${VALIDATE_SCRIPT}" --profile core --require-cuda || exit 1
+echo "    Environment check passed."
+echo ""
 
 # Ensure log directory exists and is clean
 rm -rf "$LOG_DIR"
@@ -40,12 +56,12 @@ do
     echo ">>> Trial $i / $NUM_RUNS — Training..."
 
     # Run training with 'time', capture everything (stdout+stderr) to log
-    { time python -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
+    { time "${RUNNER}" -u "$TRAIN_SCRIPT" "$CONFIG" ; } > "$LOG_DIR/train_$i.log" 2>&1
 
     echo "    Training done. Running sample & verify..."
 
     # Run verification, output to separate log
-    python -u "$VERIFY_SCRIPT" > "$LOG_DIR/verify_$i.log" 2>&1
+    "${RUNNER}" -u "$VERIFY_SCRIPT" > "$LOG_DIR/verify_$i.log" 2>&1
 
     echo "    Trial $i complete."
     echo ""
