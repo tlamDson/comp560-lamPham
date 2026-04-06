@@ -1,0 +1,14 @@
+# Core runtime for training, verification, benchmarking, and tuning bots
+torch
+numpy
+tqdm
+
+# Bot and tooling
+optuna>=3.6.1
+nvidia-ml-py>=12.535.161
+
+# nanoGPT and data workflows
+transformers
+datasets
+tiktoken
+wandb

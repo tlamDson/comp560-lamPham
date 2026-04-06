@@ -1,0 +1,6 @@
+# Phi-specific extension layer
+accelerate
+bitsandbytes
+peft
+trl
+deepspeed

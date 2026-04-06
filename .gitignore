@@ -3,6 +3,7 @@
 venv/
 env/
 .env/
+.env
 
 # Python cache
 __pycache__/
@@ -23,6 +24,7 @@ build/
 # Model output directories
 out/
 out-*/
+out_*/
 
 # Data files (generated)
 *.bin
@@ -54,6 +56,9 @@ Thumbs.db
 # Logs
 *.log
 wandb/
+
+# Torch compile cache
+**/inductor_cache/
 
 # Temporary profiling configs
 **/_tmp_profile_*.py
