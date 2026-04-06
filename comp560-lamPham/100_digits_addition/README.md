@@ -18,37 +18,37 @@ python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f
 
 Prepare data:
 ```bash
-python data/basic/prepare.py
+../../run.sh data/basic/prepare.py
 ```
 
 Train (NanoGPT, default in config/basic.py):
 ```bash
-time python -u ../common/train.py config/basic.py
+time ../../run.sh -u ../common/train.py config/basic.py
 ```
 
 Train (Phi) via CLI override on the same config file:
 ```bash
-time python -u ../common/train.py config/basic.py --model_family=phi --phi_model_source=Phi-3-mini-4k-instruct --out_dir=out_phi
+time ../../run.sh -u ../common/train.py config/basic.py --model_family=phi --phi_model_source=Phi-3-mini-4k-instruct --out_dir=out_phi
 ```
 
 Train (Phi) via dedicated config:
 ```bash
-time python -u ../common/train.py config/phi_100_digits.py
+time ../../run.sh -u ../common/train.py config/phi_100_digits.py
 ```
 
 Verify (NanoGPT checkpoint in out):
 ```bash
-python sample_and_verify_linux.py
+../../run.sh sample_and_verify_linux.py
 ```
 
 Verify (Phi checkpoint in out_phi):
 ```bash
-OUT_DIR=out_phi python sample_and_verify_linux.py
+OUT_DIR=out_phi ../../run.sh sample_and_verify_linux.py
 ```
 
 If you trained Phi with CLI override but did NOT set `--out_dir=out_phi`, your checkpoint is in `out`:
 ```bash
-OUT_DIR=out python sample_and_verify_linux.py
+OUT_DIR=out ../../run.sh sample_and_verify_linux.py
 ```
 
 Benchmark:

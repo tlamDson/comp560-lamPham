@@ -4,26 +4,27 @@ This folder trains and evaluates a 20-digit addition model using the shared trai
 
 ## Quick Start
 
-Environment check (Torch/CUDA):
+Environment check (recommended wrapper + gatekeeper):
 ```bash
-which python
-python -c "import sys, torch, numpy; print(f'python: {sys.executable}'); print(f'torch: {torch.__version__}, numpy: {numpy.__version__}, CUDA: {torch.cuda.is_available()}')"
+# From repository root (one-time setup)
+cp .env.example .env
+chmod +x run.sh
+./run.sh validate_env.py --profile core --require-cuda
 ```
 
 Prepare data:
 ```bash
-cd 20_digits_addition
-python data/basic/prepare.py
+../../run.sh data/basic/prepare.py
 ```
 
 Train:
 ```bash
-time python -u ../common/train.py config/basic.py
+time ../../run.sh -u ../common/train.py config/basic.py
 ```
 
 Verify:
 ```bash
-python sample_and_verify_linux.py
+../../run.sh sample_and_verify_linux.py
 ```
 
 Benchmark:

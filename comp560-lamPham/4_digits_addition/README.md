@@ -56,7 +56,18 @@ Each example is exactly 20 characters (4+1+4+1+5+padding), designed to teach the
 
 ### 1. Environment Setup
 
-**Option A: Use Conda environment (recommended for GPU)**
+**Recommended (portable and no interpreter drift): use root wrapper + gatekeeper**
+
+```bash
+# From repository root
+cp .env.example .env
+# Edit .env and set ML_PYTHON_PATH to your canonical interpreter
+
+chmod +x run.sh
+./run.sh validate_env.py --profile core --require-cuda
+```
+
+**Option A: Use Conda environment directly (advanced users)**
 
 ```bash
 # Verify packages are available
@@ -79,7 +90,7 @@ pip install torch numpy tqdm
 
 ```bash
 cd comp560-lamPham/4_digits_addition
-python data/basic/prepare.py
+../../run.sh data/basic/prepare.py
 ```
 
 This generates 250k training examples and validation data.
@@ -87,7 +98,7 @@ This generates 250k training examples and validation data.
 ### 3. Verify CUDA (Optional but Recommended)
 
 ```bash
-python check_cuda.py
+../../run.sh check_cuda.py
 ```
 
 Confirms GPU acceleration is available for fast training.
@@ -101,13 +112,13 @@ Confirms GPU acceleration is available for fast training.
 **With output to screen** (see training progress):
 
 ```bash
-time python -u ../common/train.py config/basic.py
+time ../../run.sh -u ../common/train.py config/basic.py
 ```
 
 **Silent mode** (redirect to `/dev/null` - saves CPU time by not printing to screen):
 
 ```bash
-time python -u ../common/train.py config/basic.py > /dev/null
+time ../../run.sh -u ../common/train.py config/basic.py > /dev/null
 ```
 
 > **Note:** Using `> /dev/null` eliminates console I/O overhead, resulting in faster execution. This is especially useful for CPU-bound systems or when running benchmarks.
@@ -182,7 +193,7 @@ Core behavior:
 
 ```bash
 cd comp560-lamPham/4_digits_addition
-pip install -r requirements_tuning.txt
+../../run.sh -m pip install -r requirements_tuning.txt
 ```
 
 ### Manual Smoke Test (recommended first)
@@ -190,7 +201,7 @@ pip install -r requirements_tuning.txt
 Run a short test to verify the bot wiring and report generation:
 
 ```bash
-python hyperopt_bot.py \
+../../run.sh hyperopt_bot.py \
     --study-name 4digit-smoke \
     --n-trials 3 \
     --timeout-min 20 \
@@ -198,7 +209,7 @@ python hyperopt_bot.py \
     --eval-interval 100 \
     --eval-iters 2 \
     --log-interval 50 \
-    --compile-trials=false
+    --no-compile-trials
 ```
 
 What this smoke test validates:
@@ -213,7 +224,7 @@ What this smoke test validates:
 After smoke test passes, run a larger search:
 
 ```bash
-python hyperopt_bot.py \
+../../run.sh hyperopt_bot.py \
     --study-name 4digit-full \
     --n-trials 30 \
     --timeout-min 180 \
@@ -301,7 +312,7 @@ Options:
 nvidia-smi -l 1
 
 # In terminal 2
-time python -u ../common/train.py config/basic.py
+time ../../run.sh -u ../common/train.py config/basic.py
 ```
 
 ---
@@ -311,7 +322,7 @@ time python -u ../common/train.py config/basic.py
 After training, test the model's accuracy on 100 test cases:
 
 ```bash
-python sample_and_verify_linux.py
+../../run.sh sample_and_verify_linux.py
 ```
 
 This script:
@@ -324,7 +335,7 @@ This script:
 Test individual predictions:
 
 ```bash
-python -u ../../comp560-nanoGPT/sample.py config/basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="1234+5678="
+../../run.sh -u ../../comp560-nanoGPT/sample.py config/basic.py --num_samples=1 --max_new_tokens=5 --seed=42 --start="1234+5678="
 ```
 
 ---
@@ -428,7 +439,7 @@ batch_size = 512  # Down from 1024
 **Solution:** Use silent mode to reduce I/O overhead:
 
 ```bash
-time python -u ../common/train.py config/basic.py > /dev/null
+time ../../run.sh -u ../common/train.py config/basic.py > /dev/null
 ```
 
 ### Issue: Model Not Reaching 99% Accuracy
