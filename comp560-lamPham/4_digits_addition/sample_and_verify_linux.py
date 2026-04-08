@@ -1,64 +1,125 @@
 """
-Optimized Sample and Verify for 4-digit Addition (Reversed Target Edition).
-
-This script loads the model ONCE and runs all predictions in-process,
-avoiding the massive overhead of spawning a subprocess for each sample.
+Sample and verify 4-digit addition with reversed targets.
 """
 
 import os
-import sys
-import random
-import time
 import pickle
+import random
+import re
+import sys
+import time
+from collections import Counter
 from contextlib import nullcontext
 
 import torch
 
-# Add nanoGPT to path
 NANOGPT_PATH = os.path.abspath("../../comp560-nanoGPT")
 sys.path.insert(0, NANOGPT_PATH)
+from model import GPT, GPTConfig
 
-from model import GPTConfig, GPT
-
-# ============================================================================
-# Configuration
-# ============================================================================
-OUT_DIR = 'out'
-CONFIG_FILE = 'config/basic.py'
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-DTYPE = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float32'
-
-# Sampling parameters
-MAX_NEW_TOKENS = 5  # 5-digit result for 4-digit addition
+NUM_DIGITS = 4
+RESULT_DIGITS = NUM_DIGITS + 1
+OUT_DIR = os.environ.get("OUT_DIR", "out")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DTYPE = "bfloat16" if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else "float32"
+MAX_NEW_TOKENS = RESULT_DIGITS
 TEMPERATURE = 0.8
 TOP_K = 200
 SEED = 42
+TOTAL_EVAL_CASES = 100
+SCENARIO_WEIGHTS = {
+    "stratified_random": 0.70,
+    "cascading_carries": 0.10,
+    "extreme_imbalance": 0.10,
+    "boundary_zeros": 0.10,
+}
 
-# Evaluation parameters
-EVAL_PER_CARRY = 20  # 20 samples per carry count (0-4) = 100 total
-GPU_MONITOR_INTERVAL = 20
-DEVICE_LOG_INTERVAL = 100
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
+def random_with_length(num_digits):
+    if num_digits < 1 or num_digits > NUM_DIGITS:
+        raise ValueError(f"num_digits must be in [1, {NUM_DIGITS}]")
+    if num_digits == 1:
+        return random.randint(0, 9)
+    low = 10 ** (num_digits - 1)
+    high = (10 ** num_digits) - 1
+    return random.randint(low, high)
 
-def get_gpu_stats():
-    """Get GPU memory and utilization stats."""
-    if not torch.cuda.is_available():
-        return "GPU: Not available"
-    
-    allocated = torch.cuda.memory_allocated() / 1024**3
-    reserved = torch.cuda.memory_reserved() / 1024**3
-    max_memory = torch.cuda.max_memory_allocated() / 1024**3
-    
-    return f"GPU Memory: {allocated:.2f}GB allocated, {reserved:.2f}GB reserved, {max_memory:.2f}GB peak"
+
+def stratified_random_pair():
+    len_a = random.randint(1, NUM_DIGITS)
+    len_b = random.randint(1, NUM_DIGITS)
+    return random_with_length(len_a), random_with_length(len_b)
+
+
+def cascading_carry_pair():
+    chain_min = max(2, NUM_DIGITS // 3)
+    chain_len = random.randint(chain_min, NUM_DIGITS)
+    high_len = random.randint(chain_len, NUM_DIGITS)
+
+    high = random_with_length(high_len)
+    high_str = f"{high:0{high_len}d}"
+    left = high_str[:-chain_len] if chain_len < len(high_str) else ""
+    tail = "9" * chain_len
+    a = int((left + tail).zfill(high_len))
+
+    b = random.randint(1, 9)
+    if random.random() < 0.35:
+        max_extra = min(6, NUM_DIGITS - 1)
+        if max_extra >= 2:
+            extra_len = random.randint(2, max_extra)
+            b = random_with_length(extra_len)
+            b = (b // 10) * 10 + random.randint(1, 9)
+
+    return min(a, 10**NUM_DIGITS - 1), min(b, 10**NUM_DIGITS - 1)
+
+
+def extreme_imbalance_pair():
+    len_big_min = max(2, int(round(NUM_DIGITS * 0.7)))
+    len_big = random.randint(len_big_min, NUM_DIGITS)
+    len_small_max = max(1, min(3, NUM_DIGITS - 1))
+    len_small = random.randint(1, len_small_max)
+
+    big = random_with_length(len_big)
+    if random.random() < 0.7:
+        small = random.choice([0, 1])
+    else:
+        small = random_with_length(len_small)
+
+    return (big, small) if random.random() < 0.5 else (small, big)
+
+
+def boundary_zeros_pair():
+    mode = random.random()
+
+    if mode < 0.4:
+        a = random.randint(5 * 10 ** (NUM_DIGITS - 1), 10**NUM_DIGITS - 1)
+        b = random.randint(5 * 10 ** (NUM_DIGITS - 1), 10**NUM_DIGITS - 1)
+        return a, b
+
+    if mode < 0.8:
+        def zero_heavy(length):
+            digits = ["0"] * length
+            non_zero_count = random.randint(1, max(1, length // 8))
+            picks = random.sample(range(length), non_zero_count)
+            for idx in picks:
+                digits[idx] = str(random.randint(1, 9))
+            if digits[0] == "0":
+                digits[0] = str(random.randint(1, 9))
+            return int("".join(digits))
+
+        len_a = random.randint(1, NUM_DIGITS)
+        len_b = random.randint(1, NUM_DIGITS)
+        return zero_heavy(len_a), zero_heavy(len_b)
+
+    a = 10**NUM_DIGITS - random.randint(1, 99)
+    b = random.choice([0, 1, 2, 5, 9])
+    return a, b
+
 
 def count_carries(a, b):
-    """Count carries for 4-digit addition."""
     carries = 0
     carry = 0
-    for i in range(4):  # 4 digits
+    for i in range(NUM_DIGITS):
         digit_a = (a // (10 ** i)) % 10
         digit_b = (b // (10 ** i)) % 10
         if digit_a + digit_b + carry >= 10:
@@ -68,242 +129,218 @@ def count_carries(a, b):
             carry = 0
     return carries
 
-def format_prompt(a, b):
-    """Format addition prompt: 1234+5678="""
-    return f"{a:04d}+{b:04d}="
 
-def generate_test_cases(seed, eval_per_carry):
-    """Generate balanced test cases across carry counts."""
-    random.seed(seed)
+def scenario_counts(total_examples, scenario_weights):
+    names = list(scenario_weights.keys())
+    counts = {name: int(total_examples * scenario_weights[name]) for name in names}
+    assigned = sum(counts.values())
+    remainder = total_examples - assigned
+    for name in sorted(names, key=lambda n: scenario_weights[n], reverse=True)[:remainder]:
+        counts[name] += 1
+    return counts
+
+
+def canonical_pair(a, b):
+    return (a, b) if a <= b else (b, a)
+
+
+def build_eval_cases(total_examples, scenario_weights):
+    generators = {
+        "stratified_random": stratified_random_pair,
+        "cascading_carries": cascading_carry_pair,
+        "extreme_imbalance": extreme_imbalance_pair,
+        "boundary_zeros": boundary_zeros_pair,
+    }
+
+    counts = scenario_counts(total_examples, scenario_weights)
     cases = []
-    counts = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    attempts = 0
-    max_attempts = 100000
-    
-    while any(counts[c] < eval_per_carry for c in counts) and attempts < max_attempts:
-        a = random.randint(1000, 9999)
-        b = random.randint(1000, 9999)
-        carries = count_carries(a, b)
-        if counts[carries] < eval_per_carry:
-            cases.append((a, b))
-            counts[carries] += 1
-        attempts += 1
-    return cases, counts
+    seen = set()
 
-# ============================================================================
-# Model Loading
-# ============================================================================
+    for scenario, target in counts.items():
+        generator = generators[scenario]
+        accepted = 0
+        attempts = 0
+        while accepted < target:
+            attempts += 1
+            if attempts > target * 200:
+                raise RuntimeError(f"Too many duplicate attempts in scenario {scenario}")
 
-def load_model(out_dir, device, dtype):
-    """Load the trained model from checkpoint with device verification."""
-    print(f"Loading model from {out_dir}/ckpt.pt...")
-    print(f"⚡ System Strategy: Active Device is [{device}]")
-    print(f"Dtype: {dtype}")
-    
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+            a, b = generator()
+            if a < 0 or b < 0 or a >= 10**NUM_DIGITS or b >= 10**NUM_DIGITS:
+                continue
+
+            key = canonical_pair(a, b)
+            if key in seen:
+                continue
+            seen.add(key)
+            cases.append((a, b, scenario))
+            accepted += 1
+
+    random.shuffle(cases)
+    return cases
+
+
+def format_prompt(a, b):
+    return f"{a:0{NUM_DIGITS}d}+{b:0{NUM_DIGITS}d}="
+
+
+def load_model(out_dir, device):
+    ckpt_path = os.path.join(out_dir, "ckpt.pt")
     if not os.path.exists(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-    
+
     checkpoint = torch.load(ckpt_path, map_location=device)
-    gptconf = GPTConfig(**checkpoint['model_args'])
+    gptconf = GPTConfig(**checkpoint["model_args"])
     model = GPT(gptconf)
-    
-    state_dict = checkpoint['model']
-    unwanted_prefix = '_orig_mod.'
-    for k, v in list(state_dict.items()):
+
+    state_dict = checkpoint["model"]
+    unwanted_prefix = "_orig_mod."
+    for k in list(state_dict.keys()):
         if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-            
+            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+
     model.load_state_dict(state_dict)
     model.eval()
     model.to(device)
-    
-    model_device = next(model.parameters()).device
-    if device == 'cuda' and model_device.type != 'cuda':
-        print(f"❌ CRITICAL ERROR: Model is on {model_device}, not CUDA.")
-        sys.exit(1)
-    print(f"✅ Model loaded on device: {model_device}")
-    
-    dataset = checkpoint['config'].get('dataset', 'basic')
-    meta_path = os.path.join('data', dataset, 'meta.pkl')
-    
-    if os.path.exists(meta_path):
-        print(f"Loading tokenizer from {meta_path}...")
-        with open(meta_path, 'rb') as f:
-            meta = pickle.load(f)
-        stoi, itos = meta['stoi'], meta['itos']
-        encode = lambda s: [stoi[c] for c in s]
-        decode = lambda l: ''.join([itos[i] for i in l])
-    else:
-        raise FileNotFoundError(f"Meta file not found: {meta_path}")
-    
-    print(f"Model loaded! Parameters: {sum(p.numel() for p in model.parameters()):,}")
-    print(get_gpu_stats())
-    
-    return model, encode, decode, checkpoint
 
-# ============================================================================
-# Inference
-# ============================================================================
+    dataset = checkpoint["config"].get("dataset", "basic")
+    meta_path = os.path.join("data", dataset, "meta.pkl")
+    with open(meta_path, "rb") as f:
+        meta = pickle.load(f)
 
-def sample_single(model, encode, decode, prompt, device, dtype, max_new_tokens, temperature, top_k):
-    """Generate tokens for a single prompt."""
-    device_type = 'cuda' if 'cuda' in device else 'cpu'
-    ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-    ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-    
-    start_ids = encode(prompt)
-    x = torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...]
-    
+    stoi, itos = meta["stoi"], meta["itos"]
+    encode = lambda s: [stoi[c] for c in s]
+    decode = lambda l: "".join([itos[i] for i in l])
+
+    return model, encode, decode
+
+
+def sample_single(model, encode, decode, prompt, device, dtype):
+    device_type = "cuda" if "cuda" in device else "cpu"
+    ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[dtype]
+    ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
+    x = torch.tensor(encode(prompt), dtype=torch.long, device=device)[None, ...]
     with torch.no_grad():
         with ctx:
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            
-    output = decode(y[0].tolist())
-    return output
+            y = model.generate(x, MAX_NEW_TOKENS, temperature=TEMPERATURE, top_k=TOP_K)
+    return decode(y[0].tolist())
+
 
 def extract_prediction(output, prompt):
-    """Extract and REVERSE the 5-digit sum from model output."""
     idx = output.find(prompt)
     if idx == -1:
         return None
-    
-    after = output[idx + len(prompt):]
-    
-    import re
-    match = re.search(r"(\d{5})", after)
+    after = output[idx + len(prompt) :]
+    match = re.search(r"(\d{%d})" % RESULT_DIGITS, after)
     if not match:
         return None
-    
-    # Lấy ra chuỗi mô hình sinh (bị ngược) và đảo xuôi lại
-    reversed_pred = match.group(1)
-    return reversed_pred[::-1]
+    return match.group(1)[::-1]
 
-# ============================================================================
-# Main Evaluation
-# ============================================================================
 
 def main():
-    print("=" * 60)
-    print("OPTIMIZED SAMPLE & VERIFY (REVERSED TARGET EDITION)")
-    print("=" * 60)
-    print()
-    
+    random.seed(SEED)
     torch.manual_seed(SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(SEED)
-        
-    start_load = time.time()
-    model, encode, decode, checkpoint = load_model(OUT_DIR, DEVICE, DTYPE)
-    load_time = time.time() - start_load
-    print(f"Model load time: {load_time:.2f}s\n")
-    
-    cases, counts = generate_test_cases(SEED, EVAL_PER_CARRY)
-    total_cases = len(cases)
-    print(f"Test cases: {total_cases}")
-    print(f"Carry distribution: {counts}\n")
-    
+
+    print(f"{NUM_DIGITS}-DIGIT SAMPLE & VERIFY")
+    model, encode, decode = load_model(OUT_DIR, DEVICE)
+
+    scenario_weights = dict(SCENARIO_WEIGHTS)
+    meta_path = os.path.join("data", "basic", "meta.pkl")
+    if os.path.exists(meta_path):
+        with open(meta_path, "rb") as f:
+            meta = pickle.load(f)
+        if isinstance(meta.get("scenario_weights"), dict):
+            scenario_weights = meta["scenario_weights"]
+
+    eval_cases = build_eval_cases(TOTAL_EVAL_CASES, scenario_weights)
+
+    by_carry = {c: {"correct": 0, "total": 0} for c in range(NUM_DIGITS + 1)}
+    by_scenario = {name: {"correct": 0, "total": 0} for name in scenario_weights}
+    scenario_eval_hist = Counter()
     correct = 0
     errors = []
-    by_carry = {i: {"correct": 0, "total": 0} for i in range(5)}
-    
-    print("Running evaluation...")
-    print("-" * 60)
-    
-    start_eval = time.time()
-    for i, (a, b) in enumerate(cases):
+
+    start = time.time()
+    for a, b, scenario in eval_cases:
         prompt = format_prompt(a, b)
         carries = count_carries(a, b)
+
         by_carry[carries]["total"] += 1
-        
-        output = sample_single(
-            model, encode, decode, prompt,
-            DEVICE, DTYPE, MAX_NEW_TOKENS, TEMPERATURE, TOP_K
-        )
-        
+        by_scenario[scenario]["total"] += 1
+        scenario_eval_hist[scenario] += 1
+
+        output = sample_single(model, encode, decode, prompt, DEVICE, DTYPE)
         predicted_str = extract_prediction(output, prompt)
         actual_sum = a + b
-        
-        if predicted_str is not None:
-            try:
-                predicted = int(predicted_str)
-                if predicted == actual_sum:
-                    correct += 1
-                    by_carry[carries]["correct"] += 1
-                else:
-                    errors.append((a, b, predicted_str, actual_sum))
-            except ValueError:
-                errors.append((a, b, predicted_str, actual_sum))
+
+        if predicted_str is not None and predicted_str.isdigit() and int(predicted_str) == actual_sum:
+            correct += 1
+            by_carry[carries]["correct"] += 1
+            by_scenario[scenario]["correct"] += 1
         else:
-            errors.append((a, b, None, actual_sum))
-            
-        if (i + 1) % GPU_MONITOR_INTERVAL == 0 or i == total_cases - 1:
-            elapsed = time.time() - start_eval
-            rate = (i + 1) / elapsed
-            eta = (total_cases - i - 1) / rate if rate > 0 else 0
-            print(f"Progress: {i+1}/{total_cases} ({100*(i+1)/total_cases:.0f}%) | "
-                  f"Rate: {rate:.1f} samples/sec | ETA: {eta:.1f}s | "
-                  f"Acc so far: {100*correct/(i+1):.1f}%")
-            
-    eval_time = time.time() - start_eval
-    
-    print("\n" + "=" * 60)
-    print("VERIFICATION RESULTS")
-    print("=" * 60)
-    print(f"Total cases: {total_cases}")
-    print(f"Correct: {correct}")
-    print(f"Accuracy: {100 * correct / total_cases:.1f}%")
-    print(f"Evaluation time: {eval_time:.2f}s ({total_cases/eval_time:.1f} samples/sec)\n")
-    
+            errors.append((scenario, a, b, predicted_str, actual_sum))
+
+    total = len(eval_cases)
+    elapsed = time.time() - start
+
+    print(f"Accuracy: {100 * correct / total:.1f}%")
+    print(f"Evaluation time: {elapsed:.2f}s")
+
+    print("Scenario mix in evaluation:")
+    for scenario in scenario_weights:
+        print(f"  {scenario}: {scenario_eval_hist[scenario]}")
+
+    print("Accuracy by scenario:")
+    for scenario in scenario_weights:
+        s_total = by_scenario[scenario]["total"]
+        s_correct = by_scenario[scenario]["correct"]
+        if s_total > 0:
+            print(f"  {scenario}: {s_correct}/{s_total} ({100 * s_correct / s_total:.1f}%)")
+
     print("Accuracy by carry count:")
     for carry_count in sorted(by_carry.keys()):
         c_total = by_carry[carry_count]["total"]
         c_correct = by_carry[carry_count]["correct"]
-        if c_total == 0:
-            print(f"  carry {carry_count}: no samples")
-        else:
-            c_acc = 100 * c_correct / c_total
-            print(f"  carry {carry_count}: {c_correct}/{c_total} ({c_acc:.1f}%)")
-            
-    if errors:
-        print(f"\nErrors found: {len(errors)} (showing up to 10)")
-        for a, b, pred_sum, actual_sum in errors[:10]:
-            pred_str = pred_sum if pred_sum is not None else "None"
-            print(f"  {a:04d}+{b:04d}={pred_str} should be {actual_sum:05d}")
-    else:
-        print("\nPERFECT! All predictions correct!")
-        
+        if c_total > 0:
+            print(f"  carry {carry_count}: {c_correct}/{c_total} ({100 * c_correct / c_total:.1f}%)")
+
     os.makedirs("results", exist_ok=True)
-    report_lines = [
-        "4-DIGIT ARITHMETIC OPTIMIZED EVAL REPORT (REVERSED TARGETS)",
-        f"Total cases: {total_cases}",
-        f"Correct: {correct}",
-        f"Accuracy: {100 * correct / total_cases:.1f}%",
-        f"Model load time: {load_time:.2f}s",
-        f"Evaluation time: {eval_time:.2f}s",
-        f"Throughput: {total_cases/eval_time:.1f} samples/sec",
-        "",
-        "Accuracy by carry count:",
-    ]
-    for carry_count in sorted(by_carry.keys()):
-        c_total = by_carry[carry_count]["total"]
-        c_correct = by_carry[carry_count]["correct"]
-        if c_total == 0:
-            report_lines.append(f"  carry {carry_count}: no samples")
-        else:
-            c_acc = 100 * c_correct / c_total
-            report_lines.append(f"  carry {carry_count}: {c_correct}/{c_total} ({c_acc:.1f}%)")
-            
-    report_lines.append("\nErrors (up to 10):")
-    for a, b, pred_sum, actual_sum in errors[:10]:
-        pred_str = pred_sum if pred_sum is not None else "None"
-        report_lines.append(f"  {a:04d}+{b:04d}={pred_str} should be {actual_sum:05d}")
-        
     with open("results/llm_output.txt", "w") as f:
-        f.write("\n".join(report_lines) + "\n")
-        
-    print(f"\nSaved report to results/llm_output.txt")
-    print(f"Total time: {load_time + eval_time:.2f}s")
+        f.write(f"{NUM_DIGITS}-DIGIT EVAL REPORT\n")
+        f.write(f"Total cases: {total}\n")
+        f.write(f"Correct: {correct}\n")
+        f.write(f"Accuracy: {100 * correct / total:.1f}%\n")
+        f.write(f"Throughput: {total / elapsed:.1f} samples/sec\n\n")
+
+        f.write("Scenario mix in evaluation:\n")
+        for scenario in scenario_weights:
+            f.write(f"  {scenario}: {scenario_eval_hist[scenario]}\n")
+
+        f.write("\nAccuracy by scenario:\n")
+        for scenario in scenario_weights:
+            s_total = by_scenario[scenario]["total"]
+            s_correct = by_scenario[scenario]["correct"]
+            if s_total > 0:
+                f.write(f"  {scenario}: {s_correct}/{s_total} ({100 * s_correct / s_total:.1f}%)\n")
+
+        f.write("\nAccuracy by carry count:\n")
+        for carry_count in sorted(by_carry.keys()):
+            c_total = by_carry[carry_count]["total"]
+            c_correct = by_carry[carry_count]["correct"]
+            if c_total > 0:
+                f.write(f"  carry {carry_count}: {c_correct}/{c_total} ({100 * c_correct / c_total:.1f}%)\n")
+
+        f.write("\nSample errors (up to 10):\n")
+        for scenario, a, b, pred_sum, actual_sum in errors[:10]:
+            pred_str = pred_sum if pred_sum is not None else "None"
+            f.write(
+                f"  [{scenario}] {a:0{NUM_DIGITS}d}+{b:0{NUM_DIGITS}d}={pred_str} "
+                f"should be {actual_sum:0{RESULT_DIGITS}d}\n"
+            )
+
 
 if __name__ == "__main__":
     main()
